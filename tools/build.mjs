@@ -71,12 +71,24 @@ const LANGS = {
 const YEAR = new Date().getFullYear();
 const FOOTER = `© ${YEAR} Alireza Khakpour. All Rights Reserved. Unpublished screenplay — do not copy, share or distribute.`;
 
+// ---- embedded fonts (no Google Fonts request; works offline and privately) ----
+function face(pkg, file, family, weight, style = 'normal', range = '') {
+  const f = path.join(import.meta.dirname, 'node_modules/@fontsource', pkg, 'files', file);
+  return `@font-face{font-family:'${family}';font-style:${style};font-weight:${weight};font-display:swap;${range ? 'unicode-range:' + range + ';' : ''}src:url(data:font/woff2;base64,${fs.readFileSync(f).toString('base64')}) format('woff2')}`;
+}
+const AR_RANGE = 'U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC';
+const LAT_RANGE = 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-200B,U+2012-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD';
+// Farsi: Noto Naskh Arabic (Persian letters only). Latin/digits inside Farsi pages fall back to the serif stack.
+const FA_FONTS = ['400', '600'].map(w => face('noto-naskh-arabic', `noto-naskh-arabic-arabic-${w}-normal.woff2`, 'Noto Naskh Arabic', w, 'normal', AR_RANGE)).join('');
+const EN_FONTS = [['300', 'normal'], ['500', 'normal'], ['400', 'italic']]
+  .map(([w, st]) => face('cormorant-garamond', `cormorant-garamond-latin-${w}-${st}.woff2`, 'Cormorant Garamond', w, st)).join('');
+
 const css = `
 :root{--bg:#f7f4ee;--fg:#1d1b18;--mute:#6f6a62;--rule:#d9d2c5;--accent:#2f6f68}
 @media (prefers-color-scheme:dark){:root{--bg:#141312;--fg:#e9e4da;--mute:#9b958b;--rule:#34312c;--accent:#6fb5ac}}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.7 Georgia,'Iowan Old Style',serif}
-[dir=rtl] body,body[dir=rtl]{font-family:Vazirmatn,Tahoma,sans-serif;font-size:18px;line-height:2}
+[dir=rtl] body,body[dir=rtl]{font-family:'Noto Naskh Arabic',Georgia,serif;font-size:19px;line-height:2.05}
 main{max-width:720px;margin:0 auto;padding:2.5rem 1.25rem 4rem}
 h1{font-size:2rem;letter-spacing:.12em;text-align:center;margin:.5rem 0}
 h2{font-size:1.35rem;letter-spacing:.06em;margin:2.5rem 0 1rem;border-bottom:1px solid var(--rule);padding-bottom:.4rem}
@@ -99,8 +111,7 @@ function page({ lang, dir, title, body, rel }) {
   return `<!DOCTYPE html><html lang="${lang}" dir="${dir}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>${title}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap">
-<style>${css}</style></head><body dir="${dir}">${body}<footer>${FOOTER}</footer></body></html>`;
+<style>${lang === 'fa' ? FA_FONTS : ''}${css}</style></head><body dir="${dir}">${body}<footer>${FOOTER}</footer></body></html>`;
 }
 
 marked.use({ breaks: true });   // keep screenplay line breaks (cue / parenthetical / dialogue)
@@ -144,6 +155,9 @@ const COVERS = {
   6: null, 7: null, 8: null,
 };
 const PAINT = { 6: ['#c89a5a', '#5b3a1e'], 7: ['#3c4d7a', '#120f24'], 8: ['#1fa5a0', '#05303a'] };
+// Weekly release: Part 1 on Sat 7 Nov 2026, then every 7 days, at midnight US Central time.
+const FIRST_RELEASE = '2026-11-07T00:00:00-06:00';
+const RELEASE = n => new Date(Date.parse(FIRST_RELEASE) + (n - 1) * 7 * 864e5).toISOString();
 const AUTHOR = { en: 'Alireza Khakpour', fa: 'علیرضا خاکپور' };
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
 const FA_ORD = ['یکم', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم', 'هفتم', 'هشتم'];
@@ -158,9 +172,10 @@ for (const n of PARTS) {
   const bg = COVERS[n]
     ? `background-image:url(${await coverUri(COVERS[n])})`
     : `background:radial-gradient(120% 90% at 30% 20%, ${PAINT[n][0]}, transparent 60%), radial-gradient(90% 80% at 80% 90%, ${PAINT[n][1]}, #050605)`;
-  cards.push(`<a class="card" data-n="${n}" href="en/part-${n}.html" style="${bg}" aria-label="Part ${n}">
+  cards.push(`<a class="card" data-n="${n}" data-release="${RELEASE(n)}" href="en/part-${n}.html" style="${bg}" aria-label="Part ${n}">
   <span class="shade"></span>
   <span class="num">${ROMAN[n - 1]}</span>
+  <span class="soon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><em></em></span>
   <span class="lbl" data-en="Part ${ROMAN[n - 1]}" data-fa="بخش ${FA_ORD[n - 1]}">Part ${ROMAN[n - 1]}</span>
 </a>`);
 }
@@ -185,7 +200,7 @@ header{text-align:center;padding:0 1.5rem;margin-bottom:5.5vh}
 h1{font-weight:300;font-size:clamp(2.4rem,8.5vw,5.6rem);letter-spacing:.32em;margin-right:-.32em;line-height:1.05;
  background:linear-gradient(180deg,#fbf6ea 30%,#b9ab8f);-webkit-background-clip:text;background-clip:text;color:transparent;
  animation:rise 1.8s cubic-bezier(.2,.7,.2,1) both}
-.fa{font-family:Vazirmatn,Tahoma,sans-serif;font-weight:300;font-size:clamp(1.3rem,3.6vw,1.9rem);color:#9fd8c9;margin-top:.9rem;
+.fa{font-family:'Noto Naskh Arabic',Georgia,serif;font-weight:400;font-size:clamp(1.5rem,4vw,2.1rem);color:#9fd8c9;margin-top:.9rem;
  animation:rise 1.8s .25s cubic-bezier(.2,.7,.2,1) both}
 .by{margin-top:2.2rem;font-style:italic;font-size:1.15rem;letter-spacing:.06em;color:#b7ad9b;animation:rise 1.8s .5s cubic-bezier(.2,.7,.2,1) both}
 .by b{font-style:normal;font-weight:500;letter-spacing:.18em;text-transform:uppercase;font-size:.95rem;color:#e8dfcd;margin-left:.35em}
@@ -202,7 +217,7 @@ h1{font-weight:300;font-size:clamp(2.4rem,8.5vw,5.6rem);letter-spacing:.32em;mar
 .num{position:absolute;left:var(--l,0%);right:var(--r,0%);top:50%;transform:translateY(-50%);text-align:center;
  font-weight:300;font-size:5.2rem;letter-spacing:.06em;color:rgba(255,255,255,.88);text-shadow:0 2px 30px rgba(0,0,0,.5)}
 .lbl{position:absolute;left:calc(var(--l,0%) + 24px);bottom:22px;font-size:.95rem;letter-spacing:.28em;text-transform:uppercase;opacity:calc(1 - var(--k) * 1.6)}
-html[lang=fa] .lbl{font-family:Vazirmatn,Tahoma,sans-serif;letter-spacing:0;text-transform:none;left:auto;right:24px;font-size:1.05rem}
+html[lang=fa] .lbl{font-family:'Noto Naskh Arabic',Georgia,serif;letter-spacing:0;text-transform:none;left:auto;right:calc(var(--r,0%) + 24px);font-size:1.1rem}
 .controls{display:flex;align-items:center;justify-content:center;gap:1.5rem;margin-top:3.5vh;font-family:system-ui,sans-serif;animation:rise 1.8s 1s cubic-bezier(.2,.7,.2,1) both}
 .dots{display:flex;gap:8px}
 .dots i{width:6px;height:6px;border-radius:3px;background:rgba(236,230,218,.25);transition:all .3s}
@@ -212,9 +227,16 @@ html[lang=fa] .lbl{font-family:Vazirmatn,Tahoma,sans-serif;letter-spacing:0;text
 .lang{display:flex;border:1px solid rgba(236,230,218,.25);border-radius:999px;overflow:hidden}
 .lang button{background:none;border:0;color:#b7ad9b;padding:.45rem .95rem;font:500 .85rem system-ui,sans-serif;cursor:pointer}
 .lang button[aria-pressed=true]{background:#ece6da;color:#0b0d0c}
-.lang button:last-child{font-family:Vazirmatn,Tahoma,sans-serif}
+.lang button:last-child{font-family:'Noto Naskh Arabic',Georgia,serif;font-size:.95rem;padding-block:.35rem}
 footer{position:relative;z-index:2;text-align:center;font:12px/1.5 system-ui,sans-serif;color:#6f685d;padding:2rem 1rem 2.5rem;letter-spacing:.03em}
 @media (max-width:520px){h1{font-size:9.4vw;letter-spacing:.16em;margin-right:-.16em}.ring{margin-bottom:1.6rem}header{margin-bottom:4vh}.by{margin-top:1.6rem;font-size:1rem}.card{flex-basis:74vw;height:58vh}.rail{padding-inline:13vw}.arrow{display:none}.controls{gap:1rem}}
+.soon{display:none;position:absolute;left:var(--l,0%);right:var(--r,0%);top:calc(50% + 3.6rem);flex-direction:column;align-items:center;gap:.4rem;color:#e8dfcd;font-size:1.05rem;letter-spacing:.14em;text-transform:uppercase;opacity:calc(1 - var(--k) * .5)}
+.soon em{font-style:normal}
+html[lang=fa] .soon{font-family:'Noto Naskh Arabic',Georgia,serif;letter-spacing:0;text-transform:none;font-size:1.1rem}
+.card.locked{cursor:default;filter:saturate(calc(.35 - var(--k) * .3)) brightness(calc(.62 - var(--k) * .3))}
+.card.locked .soon{display:flex}
+.card.locked .num{color:rgba(255,255,255,.6)}
+.card.locked .soon{color:#f3ead8;text-shadow:0 1px 12px rgba(0,0,0,.8)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
 `;
 const dashJs = `
@@ -234,20 +256,26 @@ rail.addEventListener('scroll',()=>requestAnimationFrame(tick),{passive:true});a
 function go(i){const el=cards[Math.max(0,Math.min(cards.length-1,i))];rail.scrollTo({left:el.offsetLeft-(rail.clientWidth-el.offsetWidth)/2,behavior:'smooth'})}
 document.querySelector('.prev').onclick=()=>go(tick()-1);document.querySelector('.next').onclick=()=>go(tick()+1);
 addEventListener('keydown',e=>{if(e.key==='ArrowRight')go(tick()+1);if(e.key==='ArrowLeft')go(tick()-1)});
+const preview=new URLSearchParams(location.search).has('all');
+const fmt={en:new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'America/Chicago'}),
+ fa:new Intl.DateTimeFormat('fa-IR-u-ca-persian',{month:'long',day:'numeric',timeZone:'America/Chicago'})};
+const now=Date.now();let latest=0;
+cards.forEach((a,i)=>{const t=Date.parse(a.dataset.release);const open=preview||now>=t;a.classList.toggle('locked',!open);if(open)latest=i;
+ a.addEventListener('click',e=>{if(a.classList.contains('locked'))e.preventDefault()})});
 let lang='en';try{lang=localStorage.getItem('mz_lang')||'en'}catch(e){}
 function setLang(l){lang=l;document.documentElement.lang=l;
- cards.forEach(a=>{a.href=l+'/part-'+a.dataset.n+'.html';const s=a.querySelector('.lbl');s.textContent=s.dataset[l]});
+ cards.forEach(a=>{a.href=l+'/part-'+a.dataset.n+'.html';const s=a.querySelector('.lbl');s.textContent=s.dataset[l];
+  const d=fmt[l].format(new Date(a.dataset.release));a.querySelector('.soon em').textContent=d;
+  if(a.classList.contains('locked'))a.setAttribute('aria-label',(l==='fa'?'به‌زودی ':'Coming ')+d)});
  document.querySelectorAll('.lang button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===l));
  try{localStorage.setItem('mz_lang',l)}catch(e){}}
 document.querySelectorAll('.lang button').forEach(b=>b.onclick=()=>setLang(b.dataset.l));
-setLang(lang);tick();
+setLang(lang);requestAnimationFrame(()=>{const el=cards[latest];rail.scrollLeft=el.offsetLeft-(rail.clientWidth-el.offsetWidth)/2;tick()});
 `;
 fs.writeFileSync(path.join(PLAIN, 'index.html'), `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>Melchizedek · ${LANGS.fa.title}</title><meta name="theme-color" content="#060807">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,400&family=Vazirmatn:wght@300;400&display=swap">
-<style>${dashCss}</style></head><body>
+<style>${EN_FONTS}${FA_FONTS}${dashCss}</style></head><body>
 <div class="sky"></div><div class="grain"></div>
 <div class="wrap">
 <header><div class="ring"></div><h1>MELCHIZEDEK</h1><div class="fa" lang="fa" dir="rtl">${LANGS.fa.title}</div>

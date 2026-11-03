@@ -31,3 +31,11 @@ Changing a part's password logs readers out of that part only.
 
 Repo → Settings → Pages → Source: "Deploy from a branch" → Branch `main`,
 folder `/docs` → Save.
+
+## Weekly release
+
+Part 1 opens Sat 7 Nov 2026, then one part every Saturday at midnight US Central
+(Part 8 on 26 Dec). Change `FIRST_RELEASE` in `tools/build.mjs` to move it.
+Before its date a card shows a lock and the release date (Persian calendar in
+Farsi). The real protection is still each part's password: share Part N's
+password on its release day. Preview all cards yourself with `index.html?all`.
