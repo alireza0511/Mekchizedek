@@ -1,0 +1,13 @@
+# ---- PRIVATE: readable story never goes to GitHub ----
+english/
+farsi/
+media/
+*.md
+!README.md
+!LICENSE.md
+.env
+.staticrypt.json.bak
+# build intermediates
+tools/node_modules/
+build/
+.DS_Store
