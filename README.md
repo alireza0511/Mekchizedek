@@ -6,19 +6,26 @@ The site in `docs/` is AES-256 encrypted (StatiCrypt). The readable story
 
 ## Rebuild after editing the story
 
+Each part has its own password (English and Farsi of a part share it).
+The contents page (index.html) is open and shows only "Part 1 … Part 8".
+Put the passwords in `tools/.env` (gitignored):
+
+    PART1_PASSWORD='...'
+    ...
+    PART8_PASSWORD='...'
+
+Then:
+
     cd tools
     npm install            # first time only
-    STATICRYPT_PASSWORD='your-long-password' node build.mjs
-
-(or put `STATICRYPT_PASSWORD=...` in `tools/.env`, which is gitignored)
+    node build.mjs
 
 Then commit and push only `docs/`:
 
     git add docs tools/build.mjs tools/package*.json tools/.staticrypt.json
     git commit -m "Update reading draft" && git push
 
-Keep `tools/.staticrypt.json` the same across builds. It holds the salt that
-lets one login unlock every page. Changing the password logs everyone out.
+Changing a part's password logs readers out of that part only.
 
 ## GitHub Pages (one time)
 

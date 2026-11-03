@@ -16,18 +16,27 @@ const PLAIN = process.env.PLAIN_DIR ? path.resolve(process.env.PLAIN_DIR) : path
 const IMGCACHE = path.join(ROOT, 'build', 'img');     // compressed images, gitignored
 const IMG_WIDTH = 1400, IMG_QUALITY = 76;
 
-// ---- password ----
-if (fs.existsSync(path.join(import.meta.dirname, '.env'))) {
-  for (const l of fs.readFileSync(path.join(import.meta.dirname, '.env'), 'utf8').split('\n')) {
-    const m = l.match(/^\s*STATICRYPT_PASSWORD\s*=\s*['"]?(.*?)['"]?\s*$/);
-    if (m && !process.env.STATICRYPT_PASSWORD) process.env.STATICRYPT_PASSWORD = m[1];
+// ---- passwords: one per part (PART1_PASSWORD ... PART8_PASSWORD) ----
+const envFile = path.join(import.meta.dirname, '.env');
+if (fs.existsSync(envFile)) {
+  for (const l of fs.readFileSync(envFile, 'utf8').split('\n')) {
+    const m = l.match(/^\s*([A-Z0-9_]+)\s*=\s*['"]?(.*?)['"]?\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
   }
 }
-const PW = process.env.STATICRYPT_PASSWORD || '';
-if (PW.length < 14 || /[^\x21-\x7e]/.test(PW)) {
-  console.error('Set STATICRYPT_PASSWORD: at least 14 characters, Latin letters/digits/symbols only, no spaces.');
+const PASSWORDS = {};
+const problems = [];
+for (let n = 1; n <= 8; n++) {
+  const pw = process.env[`PART${n}_PASSWORD`] || '';
+  if (pw.length < 14 || /[^\x21-\x7e]/.test(pw)) problems.push(`PART${n}_PASSWORD`);
+  PASSWORDS[n] = pw;
+}
+if (problems.length) {
+  console.error('Missing or too weak in tools/.env: ' + problems.join(', '));
+  console.error('Each needs at least 14 characters, Latin letters/digits/symbols only, no spaces.');
   process.exit(1);
 }
+if (new Set(Object.values(PASSWORDS)).size < 8) console.warn('Note: some parts share the same password.');
 
 // ---- image index (match by file name; md links point at an old "new set/" path) ----
 const imgIndex = new Map();
@@ -57,7 +66,7 @@ const LANGS = {
   en: { dir: 'english', file: n => `part-${n}.md`, html: 'ltr', label: 'English', other: 'fa', otherLabel: 'فارسی',
         title: 'MELCHIZEDEK', part: n => `Part ${n}`, prev: '← Previous', next: 'Next →', contents: 'Contents' },
   fa: { dir: 'farsi', file: n => `part-${n}-fa.md`, html: 'rtl', label: 'فارسی', other: 'en', otherLabel: 'English',
-        title: 'ملکی‌صدق', part: n => `بخش ${'۱۲۳۴۵۶۷۸'[n - 1]}`, prev: 'قبلی →', next: '← بعدی', contents: 'فهرست' },
+        title: 'سایه‌ی سبز', part: n => `بخش ${'۱۲۳۴۵۶۷۸'[n - 1]}`, prev: 'قبلی →', next: '← بعدی', contents: 'فهرست' },
 };
 const YEAR = new Date().getFullYear();
 const FOOTER = `© ${YEAR} Alireza Khakpour. All Rights Reserved. Unpublished screenplay — do not copy, share or distribute.`;
@@ -112,7 +121,8 @@ for (const code of Object.keys(LANGS)) {
   const L = LANGS[code];
   fs.mkdirSync(path.join(PLAIN, code), { recursive: true });
   for (const n of PARTS) {
-    const md = fs.readFileSync(path.join(ROOT, L.dir, L.file(n)), 'utf8');
+    let md = fs.readFileSync(path.join(ROOT, L.dir, L.file(n)), 'utf8');
+    if (code === 'fa') md = md.replace(/^#\s+ملکی‌صدق\s*$/m, '# سایه‌ی سبز');
     const content = await renderMd(md);
     const prev = n > 1 ? `<a href="part-${n - 1}.html">${L.prev}</a>` : '<span></span>';
     const next = n < 8 ? `<a href="part-${n + 1}.html">${L.next}</a>` : '<span></span>';
@@ -122,24 +132,157 @@ for (const code of Object.keys(LANGS)) {
     console.log(`built ${code}/part-${n}.html`);
   }
 }
-// contents page
-const toc = PARTS.map(n => `<li><a href="en/part-${n}.html">Part ${n}</a><a href="fa/part-${n}.html" lang="fa" dir="rtl">${LANGS.fa.part(n)}</a></li>`).join('');
-fs.writeFileSync(path.join(PLAIN, 'index.html'), page({ lang: 'en', dir: 'ltr', title: 'Melchizedek',
-  body: `<main><h1>MELCHIZEDEK</h1><p class="sub" lang="fa" dir="rtl">ملکی‌صدق</p><p class="sub">A film. Approx. 90 minutes.</p><ul class="toc">${toc}</ul></main>` }));
+// ---- dashboard (open, no password): title, author, carousel of parts ----
+// Cover image per part (file name from media/). Missing → painted gradient card.
+// NOTE: the dashboard is public, so these covers are visible without a password.
+const COVERS = {
+  1: 'Woman in a Golden Hotel Corridor.png',
+  2: 'Rainy London Departure.png',
+  3: 'Foggy Cable Car Over San Francisco.png',
+  4: 'Footprints Toward Distant Sea Stacks.png',
+  5: 'Rainy Solitude at the Grand Steps.png',
+  6: null, 7: null, 8: null,
+};
+const PAINT = { 6: ['#c89a5a', '#5b3a1e'], 7: ['#3c4d7a', '#120f24'], 8: ['#1fa5a0', '#05303a'] };
+const AUTHOR = { en: 'Alireza Khakpour', fa: 'علیرضا خاکپور' };
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+const FA_ORD = ['یکم', 'دوم', 'سوم', 'چهارم', 'پنجم', 'ششم', 'هفتم', 'هشتم'];
+async function coverUri(name) {
+  const src = imgIndex.get(name.normalize('NFC'));
+  if (!src) throw new Error('Cover not found: ' + name);
+  const buf = await sharp(src).resize({ width: 900, height: 1200, fit: 'cover', position: 'attention' }).webp({ quality: 72 }).toBuffer();
+  return 'data:image/webp;base64,' + buf.toString('base64');
+}
+const cards = [];
+for (const n of PARTS) {
+  const bg = COVERS[n]
+    ? `background-image:url(${await coverUri(COVERS[n])})`
+    : `background:radial-gradient(120% 90% at 30% 20%, ${PAINT[n][0]}, transparent 60%), radial-gradient(90% 80% at 80% 90%, ${PAINT[n][1]}, #050605)`;
+  cards.push(`<a class="card" data-n="${n}" href="en/part-${n}.html" style="${bg}" aria-label="Part ${n}">
+  <span class="shade"></span>
+  <span class="num">${ROMAN[n - 1]}</span>
+  <span class="lbl" data-en="Part ${ROMAN[n - 1]}" data-fa="بخش ${FA_ORD[n - 1]}">Part ${ROMAN[n - 1]}</span>
+</a>`);
+}
+const dashCss = `
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:#060807;color:#ece6da;font-family:'Cormorant Garamond',Georgia,serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.sky{position:fixed;inset:-20%;z-index:0;pointer-events:none;
+ background:radial-gradient(40% 35% at 25% 30%,rgba(31,165,140,.28),transparent 70%),
+            radial-gradient(35% 30% at 75% 20%,rgba(214,178,110,.16),transparent 70%),
+            radial-gradient(50% 45% at 60% 85%,rgba(18,90,96,.30),transparent 70%);
+ filter:blur(20px);animation:drift 28s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate3d(0,0,0) rotate(0)}100%{transform:translate3d(4%,-3%,0) rotate(6deg)}}
+.grain{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.10;mix-blend-mode:overlay;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.wrap{position:relative;z-index:2;min-height:100%;display:flex;flex-direction:column;justify-content:center;padding:6vh 0 4vh}
+header{text-align:center;padding:0 1.5rem;margin-bottom:5.5vh}
+.ring{width:54px;height:54px;margin:0 auto 2.2rem;border-radius:50%;
+ border:1.5px solid rgba(64,196,170,.75);box-shadow:0 0 28px rgba(64,196,170,.35),inset 0 0 14px rgba(64,196,170,.25);
+ animation:breathe 6s ease-in-out infinite}
+@keyframes breathe{50%{box-shadow:0 0 46px rgba(64,196,170,.55),inset 0 0 20px rgba(64,196,170,.35)}}
+h1{font-weight:300;font-size:clamp(2.4rem,8.5vw,5.6rem);letter-spacing:.32em;margin-right:-.32em;line-height:1.05;
+ background:linear-gradient(180deg,#fbf6ea 30%,#b9ab8f);-webkit-background-clip:text;background-clip:text;color:transparent;
+ animation:rise 1.8s cubic-bezier(.2,.7,.2,1) both}
+.fa{font-family:Vazirmatn,Tahoma,sans-serif;font-weight:300;font-size:clamp(1.3rem,3.6vw,1.9rem);color:#9fd8c9;margin-top:.9rem;
+ animation:rise 1.8s .25s cubic-bezier(.2,.7,.2,1) both}
+.by{margin-top:2.2rem;font-style:italic;font-size:1.15rem;letter-spacing:.06em;color:#b7ad9b;animation:rise 1.8s .5s cubic-bezier(.2,.7,.2,1) both}
+.by b{font-style:normal;font-weight:500;letter-spacing:.18em;text-transform:uppercase;font-size:.95rem;color:#e8dfcd;margin-left:.35em}
+@keyframes rise{from{opacity:0;transform:translateY(14px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+.rail{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;
+ padding:8px max(24px,calc(50vw - 170px));animation:rise 1.8s .8s cubic-bezier(.2,.7,.2,1) both}
+.rail::-webkit-scrollbar{display:none}
+.card{--k:0;position:relative;flex:0 0 340px;height:min(56vh,460px);border-radius:28px;scroll-snap-align:center;
+ background-size:cover;background-position:center;text-decoration:none;color:#fff;overflow:hidden;
+ clip-path:inset(0 var(--r,0%) 0 var(--l,0%) round 28px);
+ filter:saturate(calc(1 - var(--k) * .6)) brightness(calc(1 - var(--k) * .45))}
+.card:focus-visible{outline:2px solid #40c4aa;outline-offset:4px}
+.shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.72))}
+.num{position:absolute;left:var(--l,0%);right:var(--r,0%);top:50%;transform:translateY(-50%);text-align:center;
+ font-weight:300;font-size:5.2rem;letter-spacing:.06em;color:rgba(255,255,255,.88);text-shadow:0 2px 30px rgba(0,0,0,.5)}
+.lbl{position:absolute;left:calc(var(--l,0%) + 24px);bottom:22px;font-size:.95rem;letter-spacing:.28em;text-transform:uppercase;opacity:calc(1 - var(--k) * 1.6)}
+html[lang=fa] .lbl{font-family:Vazirmatn,Tahoma,sans-serif;letter-spacing:0;text-transform:none;left:auto;right:24px;font-size:1.05rem}
+.controls{display:flex;align-items:center;justify-content:center;gap:1.5rem;margin-top:3.5vh;font-family:system-ui,sans-serif;animation:rise 1.8s 1s cubic-bezier(.2,.7,.2,1) both}
+.dots{display:flex;gap:8px}
+.dots i{width:6px;height:6px;border-radius:3px;background:rgba(236,230,218,.25);transition:all .3s}
+.dots i.on{width:22px;background:#40c4aa}
+.arrow{background:none;border:1px solid rgba(236,230,218,.25);color:#ece6da;width:40px;height:40px;border-radius:50%;cursor:pointer;font-size:1rem}
+.arrow:hover{border-color:#40c4aa}
+.lang{display:flex;border:1px solid rgba(236,230,218,.25);border-radius:999px;overflow:hidden}
+.lang button{background:none;border:0;color:#b7ad9b;padding:.45rem .95rem;font:500 .85rem system-ui,sans-serif;cursor:pointer}
+.lang button[aria-pressed=true]{background:#ece6da;color:#0b0d0c}
+.lang button:last-child{font-family:Vazirmatn,Tahoma,sans-serif}
+footer{position:relative;z-index:2;text-align:center;font:12px/1.5 system-ui,sans-serif;color:#6f685d;padding:2rem 1rem 2.5rem;letter-spacing:.03em}
+@media (max-width:520px){h1{font-size:9.4vw;letter-spacing:.16em;margin-right:-.16em}.ring{margin-bottom:1.6rem}header{margin-bottom:4vh}.by{margin-top:1.6rem;font-size:1rem}.card{flex-basis:74vw;height:58vh}.rail{padding-inline:13vw}.arrow{display:none}.controls{gap:1rem}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+`;
+const dashJs = `
+const rail=document.querySelector('.rail'),cards=[...rail.children],dots=document.querySelector('.dots');
+cards.forEach(()=>dots.appendChild(document.createElement('i')));
+function tick(){const c=rail.scrollLeft+rail.clientWidth/2;let best=0,bd=1e9;
+ const info=cards.map((el,i)=>{const m=el.offsetLeft+el.offsetWidth/2,d=Math.abs(m-c);if(d<bd){bd=d;best=i}
+  const k=Math.min(1,d/(el.offsetWidth*1.4));return {el,m,k,cutPx:k*.42*el.offsetWidth}});
+ let sr=0,sl=0;
+ for(let i=best;i<info.length;i++){const o=info[i];if(o.m<=c&&i===best){o.shift=0;continue}o.shift=-sr;sr+=o.cutPx}
+ for(let i=best;i>=0;i--){const o=info[i];if(i===best&&o.m>c){o.shift=0;continue}if(i===best){o.shift=0;sl+=o.cutPx;continue}o.shift=sl;sl+=o.cutPx}
+ info.forEach((o,i)=>{const cut=(o.k*42).toFixed(1)+'%';o.el.style.setProperty('--k',o.k.toFixed(3));
+  o.el.style.setProperty('--l',o.m<c?cut:'0%');o.el.style.setProperty('--r',o.m>c?cut:'0%');
+  o.el.style.transform='translateX('+(o.shift||0).toFixed(1)+'px)'});
+ [...dots.children].forEach((d,i)=>d.classList.toggle('on',i===best));return best}
+rail.addEventListener('scroll',()=>requestAnimationFrame(tick),{passive:true});addEventListener('resize',tick);
+function go(i){const el=cards[Math.max(0,Math.min(cards.length-1,i))];rail.scrollTo({left:el.offsetLeft-(rail.clientWidth-el.offsetWidth)/2,behavior:'smooth'})}
+document.querySelector('.prev').onclick=()=>go(tick()-1);document.querySelector('.next').onclick=()=>go(tick()+1);
+addEventListener('keydown',e=>{if(e.key==='ArrowRight')go(tick()+1);if(e.key==='ArrowLeft')go(tick()-1)});
+let lang='en';try{lang=localStorage.getItem('mz_lang')||'en'}catch(e){}
+function setLang(l){lang=l;document.documentElement.lang=l;
+ cards.forEach(a=>{a.href=l+'/part-'+a.dataset.n+'.html';const s=a.querySelector('.lbl');s.textContent=s.dataset[l]});
+ document.querySelectorAll('.lang button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===l));
+ try{localStorage.setItem('mz_lang',l)}catch(e){}}
+document.querySelectorAll('.lang button').forEach(b=>b.onclick=()=>setLang(b.dataset.l));
+setLang(lang);tick();
+`;
+fs.writeFileSync(path.join(PLAIN, 'index.html'), `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>Melchizedek · ${LANGS.fa.title}</title><meta name="theme-color" content="#060807">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,400&family=Vazirmatn:wght@300;400&display=swap">
+<style>${dashCss}</style></head><body>
+<div class="sky"></div><div class="grain"></div>
+<div class="wrap">
+<header><div class="ring"></div><h1>MELCHIZEDEK</h1><div class="fa" lang="fa" dir="rtl">${LANGS.fa.title}</div>
+<p class="by">written by<b>${AUTHOR.en}</b></p></header>
+<nav class="rail" aria-label="Parts">${cards.join('')}</nav>
+<div class="controls"><button class="arrow prev" aria-label="Previous">←</button><div class="dots"></div>
+<div class="lang" role="group" aria-label="Language"><button data-l="en">English</button><button data-l="fa">فارسی</button></div>
+<button class="arrow next" aria-label="Next">→</button></div>
+</div><footer>${FOOTER}</footer><script>${dashJs}</script></body></html>`);
 
-// ---- encrypt everything with one password + one salt (one login unlocks all pages) ----
+// ---- encrypt: each part (EN + FA) with its own password; contents page stays open ----
 fs.rmSync(OUT, { recursive: true, force: true });
-execFileSync(path.join(import.meta.dirname, 'node_modules/.bin/staticrypt'), [
-  PLAIN, '-r', '-d', OUT, '--short', '--remember', '30',
-  '--config', '.staticrypt.json',
-  '--template-title', 'Melchizedek',
-  '--template-instructions', 'Private reading draft. Please enter your password.',
-  '--template-button', 'Open',
-  '--template-color-primary', '#2f6f68', '--template-color-secondary', '#f7f4ee',
-], { cwd: import.meta.dirname, env: { ...process.env, STATICRYPT_PASSWORD: PW }, stdio: 'inherit' });
-// staticrypt -r -d puts files under OUT/<basename of PLAIN>/ in some versions; flatten if so
-const nested = path.join(OUT, path.basename(PLAIN));
-if (fs.existsSync(nested)) { for (const f of fs.readdirSync(nested)) fs.renameSync(path.join(nested, f), path.join(OUT, f)); fs.rmdirSync(nested); }
+fs.mkdirSync(OUT, { recursive: true });
+fs.copyFileSync(path.join(PLAIN, 'index.html'), path.join(OUT, 'index.html'));   // titles only, no story
+const bin = path.join(import.meta.dirname, 'node_modules/.bin/staticrypt');
+for (const n of PARTS) {
+  for (const code of Object.keys(LANGS)) {
+    const outDir = path.join(OUT, code);
+    execFileSync(bin, [path.join(PLAIN, code, `part-${n}.html`), '-d', outDir, '--short', '--remember', '30',
+      '--config', '.staticrypt.json',
+      '--template-title', `Melchizedek — ${code === 'fa' ? LANGS.fa.part(n) : 'Part ' + n}`,
+      '--template-instructions', code === 'fa' ? 'رمز این بخش را وارد کنید.' : `Enter the password for Part ${n}.`,
+      '--template-button', code === 'fa' ? 'باز کن' : 'Open',
+      '--template-color-primary', '#2f6f68', '--template-color-secondary', '#f7f4ee',
+    ], { cwd: import.meta.dirname, env: { ...process.env, STATICRYPT_PASSWORD: PASSWORDS[n] }, stdio: 'pipe' });
+    // give each part its own "Remember me" slot so parts don't log each other out
+    const f = path.join(outDir, `part-${n}.html`);
+    const html = fs.readFileSync(f, 'utf8')
+      .replace('"staticrypt_expiration"', `"melchizedek_exp_part${n}"`)
+      .replace('"staticrypt_passphrase"', `"melchizedek_pw_part${n}"`);
+    if (!html.includes(`melchizedek_pw_part${n}`)) throw new Error('Could not set remember key for ' + f);
+    fs.writeFileSync(f, html);
+  }
+  console.log(`encrypted part ${n} (en + fa)`);
+}
 fs.writeFileSync(path.join(OUT, '.nojekyll'), '');
 fs.writeFileSync(path.join(OUT, 'robots.txt'), 'User-agent: *\nDisallow: /\n');
 console.log('\nEncrypted site written to', OUT);
