@@ -157,6 +157,8 @@ const COVERS = {
 const PAINT = { 6: ['#c89a5a', '#5b3a1e'], 7: ['#3c4d7a', '#120f24'], 8: ['#1fa5a0', '#05303a'] };
 // Weekly release: Part 1 on Sat 7 Nov 2026, then every 7 days, at midnight US Central time.
 const FIRST_RELEASE = '2026-11-07T00:00:00-06:00';
+// Parts whose card is clickable before their release date (the date still shows; the password still applies).
+const EARLY_OPEN = [1];
 const RELEASE = n => new Date(Date.parse(FIRST_RELEASE) + (n - 1) * 7 * 864e5).toISOString();
 const AUTHOR = { en: 'Alireza Khakpour', fa: 'علیرضا خاکپور' };
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
@@ -172,7 +174,7 @@ for (const n of PARTS) {
   const bg = COVERS[n]
     ? `background-image:url(${await coverUri(COVERS[n])})`
     : `background:radial-gradient(120% 90% at 30% 20%, ${PAINT[n][0]}, transparent 60%), radial-gradient(90% 80% at 80% 90%, ${PAINT[n][1]}, #050605)`;
-  cards.push(`<a class="card" data-n="${n}" data-release="${RELEASE(n)}" href="en/part-${n}.html" style="${bg}" aria-label="Part ${n}">
+  cards.push(`<a class="card" data-n="${n}" data-release="${RELEASE(n)}"${EARLY_OPEN.includes(n) ? ' data-early="1"' : ''} href="en/part-${n}.html" style="${bg}" aria-label="Part ${n}">
   <span class="shade"></span>
   <span class="num">${ROMAN[n - 1]}</span>
   <span class="soon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><em></em></span>
@@ -237,6 +239,8 @@ html[lang=fa] .soon{font-family:'Noto Naskh Arabic',Georgia,serif;letter-spacing
 .card.locked .soon{display:flex}
 .card.locked .num{color:rgba(255,255,255,.6)}
 .card.locked .soon{color:#f3ead8;text-shadow:0 1px 12px rgba(0,0,0,.8)}
+.card.early .soon{display:flex;color:#f3ead8;text-shadow:0 1px 12px rgba(0,0,0,.8)}
+.card.early .soon svg{display:none}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
 `;
 const dashJs = `
@@ -260,7 +264,7 @@ const preview=new URLSearchParams(location.search).has('all');
 const fmt={en:new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'America/Chicago'}),
  fa:new Intl.DateTimeFormat('fa-IR-u-ca-persian',{month:'long',day:'numeric',timeZone:'America/Chicago'})};
 const now=Date.now();let latest=0;
-cards.forEach((a,i)=>{const t=Date.parse(a.dataset.release);const open=preview||now>=t;a.classList.toggle('locked',!open);if(open)latest=i;
+cards.forEach((a,i)=>{const t=Date.parse(a.dataset.release);const out=now>=t,early=a.dataset.early==='1';const open=preview||out||early;a.classList.toggle('locked',!open);a.classList.toggle('early',early&&!out&&!preview);if(open)latest=i;
  a.addEventListener('click',e=>{if(a.classList.contains('locked'))e.preventDefault()})});
 let lang='en';try{lang=localStorage.getItem('mz_lang')||'en'}catch(e){}
 function setLang(l){lang=l;document.documentElement.lang=l;
