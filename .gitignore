@@ -1,6 +1,7 @@
 # ---- PRIVATE: readable story never goes to GitHub ----
 english/
 farsi/
+chinese/
 media/
 *.md
 !README.md

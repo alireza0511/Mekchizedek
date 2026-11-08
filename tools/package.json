@@ -12,8 +12,10 @@
   "dependencies": {
     "@fontsource/cormorant-garamond": "^5.3.0",
     "@fontsource/noto-naskh-arabic": "^5.3.0",
+    "@fontsource/noto-serif-sc": "^5.3.1",
     "marked": "^14.1.4",
     "sharp": "^0.35.5",
-    "staticrypt": "^3.5.4"
+    "staticrypt": "^3.5.4",
+    "subset-font": "^2.9.0"
   }
 }

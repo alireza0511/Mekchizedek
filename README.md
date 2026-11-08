@@ -1,12 +1,17 @@
 # Melchizedek — private reading site
 
 The site in `docs/` is AES-256 encrypted (StatiCrypt). The readable story
-(`english/`, `farsi/`, `media/`) stays on this computer only: it is in
+(`english/`, `farsi/`, `chinese/`, `media/`) stays on this computer only: it is in
 `.gitignore`, and a pre-commit hook blocks it if it is ever staged.
 
 ## Rebuild after editing the story
 
-Each part has its own password (English and Farsi of a part share it).
+Each part has its own password (all languages of a part share it).
+
+Chinese (`chinese/part-N-zh.md`, Simplified, title 绿影) is optional per part:
+a part without its Chinese file is simply left out of 中文, and the 中文 card
+and links for it open the English page instead.
+
 The contents page (index.html) is open and shows only "Part 1 … Part 8".
 Put the passwords in `tools/.env` (gitignored):
 
@@ -17,7 +22,7 @@ Put the passwords in `tools/.env` (gitignored):
 Then:
 
     cd tools
-    npm install            # first time only
+    npm install            # first time, and after package.json changes
     node build.mjs
 
 Then commit and push only `docs/`:
