@@ -229,7 +229,7 @@ const PAINT = { 6: ['#c89a5a', '#5b3a1e'], 7: ['#3c4d7a', '#120f24'], 8: ['#1fa5
 // Weekly release: Part 1 on Sat 7 Nov 2026, then every 7 days, at midnight US Central time.
 const FIRST_RELEASE = '2026-11-07T00:00:00-06:00';
 // Parts whose card is clickable before their release date (the date still shows; the password still applies).
-const EARLY_OPEN = [1];
+const EARLY_OPEN = [1, 2];
 const RELEASE = n => new Date(Date.parse(FIRST_RELEASE) + (n - 1) * 7 * 864e5).toISOString();
 const AUTHOR = { en: 'Alireza Khakpour', fa: 'علیرضا خاکپور' };
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
